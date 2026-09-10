@@ -1,7 +1,63 @@
-import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosAdapter, AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store';
+import { routeMockRequest, parseQuery } from '@/lib/mock/router';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api/backend/api/v1';
+
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
+
+const mockAdapter: AxiosAdapter = (config) =>
+  new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        const method = (config.method ?? 'get').toLowerCase();
+        const base = String(config.baseURL ?? '').replace(/\/$/, '');
+        const rawUrl = String(config.url ?? '');
+        const [pathPart, qs] = rawUrl.split('?');
+        const path = `${base}/${pathPart.replace(/^\//, '')}`;
+        const params: Record<string, unknown> = { ...parseQuery(qs ?? '') };
+        if (config.params && typeof config.params === 'object') {
+          Object.entries(config.params as Record<string, unknown>).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) params[k] = v;
+          });
+        }
+        let body: unknown = config.data;
+        if (typeof body === 'string') {
+          try {
+            body = JSON.parse(body);
+          } catch {
+            // keep raw string body
+          }
+        }
+        const headers = config.headers as Record<string, unknown>;
+        const authHeader = String(headers.Authorization ?? headers.authorization ?? '');
+        const { status, data } = routeMockRequest({ method, path, params, body, authHeader });
+        const response: AxiosResponse = {
+          data,
+          status,
+          statusText: status >= 400 ? 'Error' : 'OK',
+          headers: {},
+          config,
+          request: {},
+        };
+        if (status >= 200 && status < 300) {
+          resolve(response);
+        } else {
+          reject(
+            new AxiosError(
+              `Request failed with status code ${status}`,
+              String(status),
+              config,
+              {},
+              response
+            )
+          );
+        }
+      } catch (err) {
+        reject(err instanceof Error ? err : new AxiosError('Mock adapter error'));
+      }
+    }, 200 + Math.random() * 300);
+  });
 
 const api = axios.create({
   baseURL: API_URL,
@@ -9,6 +65,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  adapter: USE_MOCK ? mockAdapter : undefined,
 });
 
 api.interceptors.request.use(
@@ -67,7 +124,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
+        const { data } = await api.post('/auth/refresh', {
           refresh_token: refreshToken,
         });
         const newAccessToken: string = data.accessToken ?? data.access_token;
