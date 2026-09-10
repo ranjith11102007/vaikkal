@@ -5,7 +5,7 @@
 #   2. Dashboard -> New -> Blueprint -> connect this GitHub repo.
 #   3. Render provisions PostgreSQL + Redis and deploys the backend & frontend,
 #      then re-deploys automatically on every push to `main`.
-#   4. (One-time) open the backend service -> Shell -> run: python seed.py
+#   4. Demo data is seeded automatically (backend initialDeployHook: python seed.py).
 #
 # Resources (all on the free tier):
 #   - Managed PostgreSQL 16 (expires after 30 days on free)
@@ -28,10 +28,12 @@ services:
     name: vaikkal-backend
     runtime: docker
     dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     plan: free
     region: oregon
     port: 8000
     healthCheckPath: /health
+    initialDeployHook: python seed.py
     envVars:
       - key: ENVIRONMENT
         value: production
@@ -80,6 +82,7 @@ services:
     name: vaikkal-frontend
     runtime: docker
     dockerContext: ./frontend
+    dockerfilePath: ./frontend/Dockerfile
     plan: free
     region: oregon
     healthCheckPath: /
