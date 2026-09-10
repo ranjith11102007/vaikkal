@@ -31,7 +31,6 @@ services:
     dockerfilePath: ./backend/Dockerfile
     plan: free
     region: oregon
-    port: 8000
     healthCheckPath: /health
     initialDeployHook: python seed.py
     envVars:
