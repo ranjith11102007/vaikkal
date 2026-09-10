@@ -48,11 +48,9 @@ services:
         value: "true"
       - key: SECRET_KEY
         generateValue: true
-      - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: vaikkal-frontend
-          envVarKey: RENDER_FRONTEND_URL
+      # CORS_ORIGINS intentionally omitted: the Next.js frontend proxies /api/*
+      # server-side (next.config.js rewrites), so browsers never call the backend
+      # cross-origin in production and the backend's localhost defaults are fine.
       # Render's managed Postgres exposes PG* vars; SQLAlchemy (async) needs
       # the postgresql+asyncpg:// scheme, so compose DATABASE_URL ourselves.
       - key: DATABASE_URL
@@ -93,13 +91,6 @@ services:
     region: oregon
     healthCheckPath: /
     envVars:
-      # Expose this service's own public URL so the backend can reference it
-      # for CORS (fromService only supports property/envVarKey references).
-      - key: RENDER_FRONTEND_URL
-        fromService:
-          name: vaikkal-frontend
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
       # Browser calls stay same-origin (/api) and are proxied server-side by
       # Next.js rewrites to the backend, so no CORS issues on the live site.
       - key: NEXT_PUBLIC_API_URL
