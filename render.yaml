@@ -19,10 +19,16 @@ databases:
     databaseName: vaikkal
     user: vaikkal
 
-  - name: vaikkal-redis
-    plan: free
-
 services:
+  # -------- Redis (Key Value) --------
+  - type: keyvalue
+    name: vaikkal-redis
+    plan: free
+    region: oregon
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+
   # -------- Backend API (FastAPI + uvicorn) --------
   - type: web
     name: vaikkal-backend
@@ -72,8 +78,9 @@ services:
           name: vaikkal-db
           property: password
       - key: REDIS_URL
-        fromDatabase:
+        fromService:
           name: vaikkal-redis
+          type: keyvalue
           property: connectionString
 
   # -------- Frontend (Next.js standalone output) --------
