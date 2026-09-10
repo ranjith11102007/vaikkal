@@ -15,8 +15,8 @@ from app.config import settings
 
 _IS_SQLITE = settings.DATABASE_URL.startswith("sqlite")
 
-scheme = settings.DATABASE_URL.split("://", 1)[0].split("+", 1)[-1]
-if scheme not in ("sqlite", "postgresql"):
+scheme = settings.DATABASE_URL.split("://", 1)[0].split("+", 1)[0]
+if scheme not in ("sqlite", "postgres", "postgresql"):
     raise ValueError(
         "DATABASE_URL must use an async driver "
         "(e.g. sqlite+aiosqlite:///... or postgresql+asyncpg://...). Got: "
@@ -72,8 +72,19 @@ async def init_db() -> None:
     """Create all tables (used for development; use Alembic in production)."""
     from app.models import Base  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Multi-process deploys can race on CREATE TYPE/tables. create_all is
+    # idempotent, so retry to let the other worker finish first.
+    import asyncio
+
+    for attempt in range(5):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            break
+        except Exception:
+            if attempt == 4:
+                raise
+            await asyncio.sleep(0.5 * (attempt + 1))
 
     if settings.DATABASE_URL.startswith("sqlite"):
         await _migrate_sqlite_users_phone_nullable()
